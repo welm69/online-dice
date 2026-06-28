@@ -249,13 +249,13 @@ body>*{position:relative;z-index:1;}
 }
 
 /* ── zone dés ── */
-#diceStage{position:relative;min-height:110px;margin-bottom:16px;}
+#diceStage{position:relative;min-height:140px;margin-bottom:16px;}
 #diceArea{
   display:flex;flex-wrap:wrap;gap:16px;
   justify-content:center;align-items:center;
-  transition:transform 0.35s ease,opacity 0.35s ease;
+  transition:opacity 0.2s ease;
 }
-#diceArea.zoom-out{transform:scale(0.3);opacity:0;}
+#diceArea.zoom-out{opacity:0;}
 .die{
   width:90px;height:90px;border-radius:16px;
   display:flex;align-items:center;justify-content:center;
@@ -266,24 +266,50 @@ body>*{position:relative;z-index:1;}
   background:white;box-shadow:0 0 0 2px rgba(0,0,0,0.08);
 }
 
-/* ── overlay rolling ── */
+/* ── overlay rolling "GOOD LUCK!" ── */
 .rolling-overlay{
   position:absolute;inset:0;
-  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
-  background:radial-gradient(circle,rgba(255,255,255,0.95) 0%,rgba(180,220,255,0.85) 70%);
-  opacity:0;pointer-events:none;transition:opacity 0.25s ease;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;
+  background:transparent;
+  opacity:0;pointer-events:none;transition:opacity 0.2s ease;
+  z-index:10;
 }
 .rolling-overlay.show{opacity:1;}
-.rolling-overlay .rl-label{color:#4FA8E8;font-weight:700;letter-spacing:2px;font-size:18px;}
-.ghost-dice{display:flex;gap:12px;}
-.ghost-die{
-  width:60px;height:60px;border-radius:12px;background:white;
-  box-shadow:0 2px 8px rgba(0,0,0,0.12);
-  animation:pulseDie 0.5s ease-in-out infinite;
+
+/* Texte GOOD LUCK! style cartoon */
+.good-luck-text{
+  font-family:Georgia,'Times New Roman',serif;
+  font-size:38px;font-weight:900;letter-spacing:3px;
+  color:white;
+  -webkit-text-stroke:2px #2a7fc0;
+  text-shadow:0 3px 0 #2a7fc0,0 5px 10px rgba(0,0,0,0.2);
+  animation:bounceTxt 0.4s ease-in-out infinite alternate;
 }
-.ghost-die:nth-child(2){animation-delay:0.1s;}
-.ghost-die:nth-child(3){animation-delay:0.2s;}
-@keyframes pulseDie{0%,100%{transform:scale(1);}50%{transform:scale(0.85);}}
+@keyframes bounceTxt{
+  0%{transform:scale(1) translateY(0);}
+  100%{transform:scale(1.04) translateY(-4px);}
+}
+
+/* Dés blancs/gris qui s'agitent */
+.ghost-dice{display:flex;gap:14px;align-items:center;}
+.ghost-die{
+  width:80px;height:80px;border-radius:16px;
+  background:#e0e0e0;
+  border:4px solid white;
+  box-shadow:0 4px 12px rgba(0,0,0,0.15);
+  display:flex;align-items:center;justify-content:center;
+}
+.ghost-die::after{
+  content:'';width:14px;height:14px;border-radius:50%;background:#bbb;display:block;
+}
+.ghost-die:nth-child(1){animation:shakeDie1 0.18s ease-in-out infinite alternate;}
+.ghost-die:nth-child(2){animation:shakeDie2 0.18s ease-in-out infinite alternate;animation-delay:0.06s;}
+.ghost-die:nth-child(3){animation:shakeDie3 0.18s ease-in-out infinite alternate;animation-delay:0.12s;}
+.ghost-die:nth-child(4){animation:shakeDie1 0.18s ease-in-out infinite alternate;animation-delay:0.04s;}
+.ghost-die:nth-child(5){animation:shakeDie2 0.18s ease-in-out infinite alternate;animation-delay:0.08s;}
+@keyframes shakeDie1{0%{transform:rotate(-6deg) translateY(0);}100%{transform:rotate(6deg) translateY(-6px);}}
+@keyframes shakeDie2{0%{transform:rotate(5deg) translateY(-4px);}100%{transform:rotate(-5deg) translateY(4px);}}
+@keyframes shakeDie3{0%{transform:rotate(-4deg) translateY(3px);}100%{transform:rotate(7deg) translateY(-5px);}}
 
 /* ── game id ── */
 .gameid{color:#eaf6ff;font-size:13px;margin-bottom:14px;}
@@ -426,12 +452,12 @@ footer.bar button{
     <div id="diceStage">
       <div id="diceArea"></div>
       <div class="rolling-overlay" id="rollingOverlay">
-        <div class="ghost-dice">
+        <div class="good-luck-text">GOOD LUCK!</div>
+        <div class="ghost-dice" id="ghostDice">
           <div class="ghost-die"></div>
           <div class="ghost-die"></div>
           <div class="ghost-die"></div>
         </div>
-        <div class="rl-label">ROLLING...</div>
       </div>
     </div>
 
@@ -485,41 +511,52 @@ function getCtx(){
   if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   return audioCtx;
 }
-function playClickTick(){
+
+/* Son de dé qui roule : bruit de cliquetis rapides */
+function playRollSound(){
   if(!soundOn) return;
   const ctx = getCtx();
-  const osc = ctx.createOscillator();
+  // Bruit blanc court = son de dés qui roulent
+  const buf = ctx.createBuffer(1, ctx.sampleRate * 0.06, ctx.sampleRate);
+  const data = buf.getChannelData(0);
+  for(let i=0;i<data.length;i++) data[i] = (Math.random()*2-1) * (1 - i/data.length);
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
   const gain = ctx.createGain();
-  osc.type = 'square';
-  osc.frequency.value = 700 + Math.random()*200;
-  gain.gain.value = 0.04;
-  osc.connect(gain).connect(ctx.destination);
-  osc.start();
-  gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime+0.06);
-  osc.stop(ctx.currentTime+0.07);
+  gain.gain.value = 0.18;
+  // Filtre passe-bande pour sonner "claquement de dé"
+  const filter = ctx.createBiquadFilter();
+  filter.type = 'bandpass';
+  filter.frequency.value = 800 + Math.random()*400;
+  filter.Q.value = 0.8;
+  src.connect(filter).connect(gain).connect(ctx.destination);
+  src.start();
 }
+
+/* Son de victoire */
 function playWinChime(){
   if(!soundOn) return;
   const ctx = getCtx();
-  [523.25,659.25,783.99].forEach((freq,i)=>{
+  [523.25,659.25,783.99,1046.5].forEach((freq,i)=>{
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = 'sine'; osc.frequency.value = freq;
     gain.gain.value = 0.0001;
     osc.connect(gain).connect(ctx.destination);
-    const t = ctx.currentTime + i*0.12;
+    const t = ctx.currentTime + i*0.13;
     osc.start(t);
-    gain.gain.linearRampToValueAtTime(0.08, t+0.02);
-    gain.gain.exponentialRampToValueAtTime(0.0001, t+0.3);
-    osc.stop(t+0.35);
+    gain.gain.linearRampToValueAtTime(0.1, t+0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t+0.4);
+    osc.stop(t+0.45);
   });
 }
+
 document.getElementById('soundToggle').addEventListener('click', function(){
   soundOn = !soundOn;
   this.textContent = soundOn ? '🔊 Son : ON' : '🔇 Son : OFF';
 });
 
-/* ══ Palettes (via serveur Flask) ═══════════════════════════════════════════ */
+/* ══ Palettes ═══════════════════════════════════════════════════════════════ */
 const palettes = {
   default: {{ colors_default | tojson }},
   pastel:  {{ colors_pastel  | tojson }},
@@ -538,10 +575,12 @@ for(let i=1;i<=20;i++){
 
 /* ══ Variables globales ══════════════════════════════════════════════════════ */
 let rollCount = 0;
+let rollInterval = null;
 const diceArea       = document.getElementById('diceArea');
 const rollBtn        = document.getElementById('rollBtn');
 const gameIdSpan     = document.getElementById('gameId');
 const rollingOverlay = document.getElementById('rollingOverlay');
+const ghostDice      = document.getElementById('ghostDice');
 const bonusPopup     = document.getElementById('bonusPopup');
 
 /* ══ Dessin des dés ══════════════════════════════════════════════════════════ */
@@ -560,6 +599,17 @@ function buildDice(count, palette){
   }
 }
 
+/* Met à jour le nombre de ghost-dés pendant le rolling */
+function setGhostDice(count){
+  ghostDice.innerHTML = '';
+  const shown = Math.min(count, 5); // max 5 affichés
+  for(let i=0;i<shown;i++){
+    const d = document.createElement('div');
+    d.className = 'ghost-die';
+    ghostDice.appendChild(d);
+  }
+}
+
 /* ══ Lancer ══════════════════════════════════════════════════════════════════ */
 async function roll(){
   const count   = parseInt(diceSelect.value, 10);
@@ -568,12 +618,18 @@ async function roll(){
   rollBtn.disabled = true;
   rollBtn.textContent = 'ROLLING...';
   bonusPopup.classList.remove('show');
+
+  // Afficher les ghost dés correspondant au nombre choisi
+  setGhostDice(count);
+
+  // Cacher les vrais dés, montrer l'overlay
   diceArea.classList.add('zoom-out');
   rollingOverlay.classList.add('show');
 
-  const tick = setInterval(playClickTick, 90);
+  // Sons de cliquetis pendant le rolling
+  rollInterval = setInterval(playRollSound, 100);
 
-  /* Appel API Flask pour obtenir un vrai Game ID généré côté serveur */
+  // Appel API Flask pour le Game ID
   let newId = gameIdSpan.textContent;
   try {
     const res  = await fetch('/api/roll?count=' + count);
@@ -582,16 +638,20 @@ async function roll(){
   } catch(e){}
 
   setTimeout(()=>{
-    clearInterval(tick);
+    clearInterval(rollInterval);
+
     buildDice(count, palette);
     gameIdSpan.textContent = newId;
+
     rollingOverlay.classList.remove('show');
     diceArea.classList.remove('zoom-out');
+
     rollBtn.disabled = false;
     rollBtn.textContent = 'ROLL AGAIN !';
+
     rollCount++;
     if(rollCount % 4 === 0){ bonusPopup.classList.add('show'); playWinChime(); }
-  }, 1000);
+  }, 1200);
 }
 
 /* ══ Événements ══════════════════════════════════════════════════════════════ */
